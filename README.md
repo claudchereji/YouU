@@ -2,9 +2,9 @@
 
 
 
-# YouU - YouTube Subtitle Downloader and Converter
+# YouU - YouTube Subtitle Downloader indexer for Studying purposes
 
-Welcome to YouU! This tool helps you download YouTube subtitles and convert them to text or Markdown format. Please follow the installation and setup instructions below for a seamless experience on Windows, macOS, or Linux.
+Welcome to YouU! This tool helps you download YouTube subtitles and convert them to text or Markdown format then appends timecode hyperlinks to each file. Please follow the installation and setup instructions below for a seamless experience on Windows, macOS, or Linux.
 Installation and Setup
 Prerequisites
 
