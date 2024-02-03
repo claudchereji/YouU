@@ -66,4 +66,8 @@ You are now ready to download and convert YouTube subtitles with YouU. If you en
 
 Note: If you are using macOS and facing issues with the application icon, you can uncomment the root.iconbitmap(default='icon.icns') line in the code to try to set the application icon yourself. Ensure that the icon file (icon.icns) is present in the same directory as the script.
 
+
+## Additional software
+
+You can use any markdown editor/viewer to visualize the scripts with their respective formatting. I personally use [Obsidian](https://obsidian.md/download)
 Happy studies!
