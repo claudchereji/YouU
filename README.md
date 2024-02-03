@@ -1,3 +1,6 @@
+![YouU Logo](https://github.com/claudchereji/YouU/blob/main/512x512.png?raw=true)
+
+
 
 # YouU - YouTube Subtitle Downloader and Converter
 
