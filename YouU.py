@@ -133,6 +133,7 @@ if [ $yt_dlp_status -eq 0 ]; then
     find . -iname "*.txt" -exec bash -c 'mv "$0" "${{0%\.txt}}.md"' {{}} \; &&
     echo "Converting subtitles to Markdown..." &&
     python3 markDownScript.py
+    bash appender.sh
     mv *.md "$folder_name"/
 
     echo "Subtitles processed successfully."
