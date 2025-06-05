@@ -1,33 +1,52 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog
 import subprocess
 import threading
 import queue
 import re
 import time
+import os
+import glob
+import shutil
+
 
 class MyApp:
     def __init__(self, root):
         self.root = root
         self.root.title("YouU")
-        
-        # Set the icon for the application
-        # root.iconbitmap(default='icon.icns')
 
         # Create and pack a label
-        label_text = "Welcome to YouU! Glad you could attend!\nPlease enter the folder name and YouTube URL below to get started"
-        label = tk.Label(root, text=label_text, wraplength=300)  # Adjust wraplength as needed
+        label_text = (
+            "Welcome to YouU! Glad you could attend!\n"
+            "Please select a folder and enter the YouTube URL below to get started"
+        )
+        label = tk.Label(root, text=label_text, wraplength=300)
         label.pack(pady=10)
 
+        # Create and pack a frame for folder selection
+        folder_frame = tk.Frame(root)
+        folder_frame.pack(pady=5)
 
-        # Create and pack a label for folder name
-        folder_label = tk.Label(root, text="Folder Name:")
-        folder_label.pack(pady=5)
+        # Create and pack a label for folder selection
+        folder_label = tk.Label(folder_frame, text="Selected Folder:")
+        folder_label.pack(side=tk.LEFT, padx=5)
 
-        # Create and pack an entry for folder name
-        self.folder_name_var = tk.StringVar()
-        folder_name_entry = tk.Entry(root, textvariable=self.folder_name_var, width=30)
-        folder_name_entry.pack(pady=5)
+        # Create and pack a label to display the selected folder path
+        self.folder_path_var = tk.StringVar()
+        self.folder_path_label = tk.Label(
+            folder_frame,
+            textvariable=self.folder_path_var,
+            width=30,
+            anchor="w",
+            relief="sunken",
+        )
+        self.folder_path_label.pack(side=tk.LEFT, padx=5)
+
+        # Create and pack a button to select folder
+        select_folder_button = tk.Button(
+            folder_frame, text="Browse...", command=self.select_folder
+        )
+        select_folder_button.pack(side=tk.LEFT, padx=5)
 
         # Create and pack a label for YouTube URL
         url_label = tk.Label(root, text="YouTube URL:")
@@ -40,7 +59,9 @@ class MyApp:
 
         # Create and pack a progress bar
         self.progress_var = tk.DoubleVar()
-        progress_bar = ttk.Progressbar(root, variable=self.progress_var, mode="determinate")
+        progress_bar = ttk.Progressbar(
+            root, variable=self.progress_var, mode="determinate"
+        )
         progress_bar.pack(pady=10)
 
         # Create and pack a label for debug information
@@ -59,46 +80,49 @@ class MyApp:
         restart_button = tk.Button(root, text="Restart", command=self.restart_app)
         restart_button.pack(pady=10)
 
+    def select_folder(self):
+        folder_path = filedialog.askdirectory(title="Select Folder to Export Files")
+        if folder_path:
+            self.folder_path_var.set(folder_path)
+
     def update_progress(self, output_queue):
-        start_time = time.time()
         total_items = None
         current_item = None
-        converting_text_shown = False  # Flag to check if converting text has been shown
+        converting_text_shown = False
 
         while True:
             try:
                 line = output_queue.get_nowait()
-                print("Output Line:", line)  # Debugging line to see the actual output
+                print("Output Line:", line)
 
-                # Parse the output to determine progress (customize as needed)
                 if "Downloading item" in line:
-                    # Extract current item and total items from the line
-                    match = re.search(r'Downloading item (\d+) of (\d+)', line)
+                    match = re.search(r"Downloading item (\d+) of (\d+)", line)
                     if match:
                         current_item, total_items = map(int, match.groups())
+                        self.progress_label.config(
+                            text=f"Progress: {current_item} of {total_items}"
+                        )
 
-                        # Update progress label dynamically
-                        self.progress_label.config(text=f"Progress: {current_item} of {total_items}")
-
-                elif "%" in line and total_items is not None and current_item is not None:
+                elif (
+                    "%" in line and total_items is not None and current_item is not None
+                ):
                     try:
                         progress_percent = int(line.split("%")[0].split()[-1])
-                        self.progress_var.set(progress_percent)
-
-                        # Update progress based on current item and total items
-                        self.progress_var.set((current_item / total_items) * progress_percent)
-
+                        self.progress_var.set(
+                            (current_item / total_items) * progress_percent
+                        )
                     except ValueError:
                         pass
 
-                elif "Converting subtitles to text..." in line or "Converting subtitles to Markdown..." in line:
-                    # Display converting text only once
+                elif (
+                    "Converting subtitles to text..." in line
+                    or "Converting subtitles to Markdown..." in line
+                ):
                     if not converting_text_shown:
                         self.debug_label.config(text=line.strip())
                         converting_text_shown = True
 
                 elif "Subtitles processed successfully." in line:
-                    # Display final output persistently
                     self.debug_label.config(text=line.strip())
 
             except queue.Empty:
@@ -106,73 +130,123 @@ class MyApp:
             self.root.update_idletasks()
 
     def format_time(self, seconds):
-        # Format seconds into HH:MM:SS
         m, s = divmod(seconds, 60)
         h, m = divmod(m, 60)
         return "{:02}:{:02}:{:02}".format(int(h), int(m), int(s))
 
+    def append_sections_to_markdown(self, folder_path):
+        """Replaces appender.sh: Adds section headers to Markdown files."""
+        for file in glob.glob(os.path.join(folder_path, "*.md")):
+            section_number = 1
+            temp_file = file + ".tmp"
+            with open(file, "r", encoding="utf-8") as f_in, open(
+                temp_file, "w", encoding="utf-8"
+            ) as f_out:
+                for line in f_in:
+                    if line.strip().startswith("https://"):
+                        f_out.write(f"\n## Section {section_number}\n")
+                        section_number += 1
+                    f_out.write(line)
+            os.replace(temp_file, file)
+        print("Section numbers added to all markdown files.")
+
     def run_process(self, output_queue):
-        folder_name = self.folder_name_var.get()
+        folder_path = self.folder_path_var.get()
         youtube_url = self.url_var.get()
 
-        bash_script_content = f"""#!/bin/bash
+        if not folder_path:
+            self.debug_label.config(text="Please select a folder.")
+            return
 
-folder_name="{folder_name}"
+        if not youtube_url:
+            self.debug_label.config(text="Please enter a YouTube URL.")
+            return
 
-mkdir "$folder_name"
+        try:
+            # Run yt-dlp to download subtitles
+            output_queue.put("Downloading subtitles...")
+            process = subprocess.Popen(
+                [
+                    "yt-dlp",
+                    "--write-auto-subs",
+                    "--default-search",
+                    "ytsearch",
+                    "--skip-download",
+                    youtube_url,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            for line in process.stdout:
+                output_queue.put(line)
+            process.communicate()
+            if process.returncode != 0:
+                output_queue.put(
+                    f"yt-dlp command failed with status {process.returncode}."
+                )
+                self.debug_label.config(text="Failed to download subtitles.")
+                return
 
-url="{youtube_url}"
+            # Process .vtt files
+            output_queue.put("Converting subtitles to text...")
+            for vtt_file in glob.glob("*.vtt"):
+                subprocess.run([sys.executable, "vtt2text.py", vtt_file], check=True)
+                os.remove(vtt_file)
 
-yt-dlp --write-auto-subs --default-search "ytsearch" --skip-download "$url" 2>&1
-yt_dlp_status=$?
+            # Rename .txt to .md
+            for txt_file in glob.glob("*.txt"):
+                md_file = os.path.splitext(txt_file)[0] + ".md"
+                os.rename(txt_file, md_file)
 
-if [ $yt_dlp_status -eq 0 ]; then
-    find . -name "*.vtt" -exec python3 vtt2text.py {{}} \; &&
-    echo "Converting subtitles to text..." && 
-    rm *.vtt && 
-    find . -iname "*.txt" -exec bash -c 'mv "$0" "${{0%\.txt}}.md"' {{}} \; &&
-    echo "Converting subtitles to Markdown..." &&
-    python3 markDownScript.py
-    bash appender.sh
-    mv *.md "$folder_name"/
+            # Process Markdown files
+            output_queue.put("Converting subtitles to Markdown...")
+            subprocess.run([sys.executable, "markDownScript.py"], check=True)
 
-    echo "Subtitles processed successfully."
-    echo "Files moved to $folder_name."
-else
-    echo "yt-dlp command failed with status $yt_dlp_status."
-fi
-"""
+            # Append section headers
+            self.append_sections_to_markdown(".")
 
-        with open("temp_script.sh", "w") as temp_file:
-            temp_file.write(bash_script_content)
+            # Move .md files to the selected folder
+            for md_file in glob.glob("*.md"):
+                shutil.move(
+                    md_file, os.path.join(folder_path, os.path.basename(md_file))
+                )
 
-        process = subprocess.Popen(["bash", "temp_script.sh"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        for line in process.stdout:
-            output_queue.put(line)
+            output_queue.put("Subtitles processed successfully.")
+            output_queue.put(f"Files moved to {folder_path}.")
+            self.debug_label.config(text="Subtitles processed successfully.")
 
-        process.communicate()
-        subprocess.run(["rm", "temp_script.sh"])
+        except Exception as e:
+            output_queue.put(f"Error: {str(e)}")
+            self.debug_label.config(text=f"Error: {str(e)}")
 
     def start_process(self):
         output_queue = queue.Queue()
-        progress_thread = threading.Thread(target=self.update_progress, args=(output_queue,), daemon=True)
+        progress_thread = threading.Thread(
+            target=self.update_progress, args=(output_queue,), daemon=True
+        )
         progress_thread.start()
 
-        process_thread = threading.Thread(target=self.run_process, args=(output_queue,), daemon=True)
+        process_thread = threading.Thread(
+            target=self.run_process, args=(output_queue,), daemon=True
+        )
         process_thread.start()
 
         self.progress_var.set(0)
         self.progress_var.trace("w", lambda *args: self.root.update_idletasks())
 
     def restart_app(self):
-        # Reset labels when restart button is clicked
-        self.folder_name_var.set("")  # Clear the folder name entry
-        self.url_var.set("")  # Clear the YouTube URL entry
+        self.folder_path_var.set("")
+        self.url_var.set("")
         self.progress_label.config(text="Progress: N/A")
         self.debug_label.config(text="")
         self.root.update_idletasks()
 
+
 if __name__ == "__main__":
+    import sys
+
     root = tk.Tk()
     app = MyApp(root)
     root.mainloop()
